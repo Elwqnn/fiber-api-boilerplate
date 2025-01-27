@@ -8,7 +8,6 @@ import (
 
 	"gorm.io/gorm"
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/session"
 	"github.com/google/uuid"
 )
 
@@ -29,15 +28,7 @@ func InitUserHandler(db *gorm.DB) *UserHandler {
 }
 
 func (h *UserHandler) GetMe(c *fiber.Ctx) error {
-	sess, err := c.Locals("store").(*session.Store).Get(c)
-	if err != nil {
-		return response.Error(c, fiber.StatusInternalServerError, "Session error")
-	}
-
-	userID := sess.Get("user_id")
-	if userID == nil {
-		return response.Error(c, fiber.StatusUnauthorized, "Unauthorized")
-	}
+	userID := c.Locals("user_id")
 
 	userIDToString, err := uuid.Parse(userID.(string))
     if err != nil {
@@ -53,15 +44,7 @@ func (h *UserHandler) GetMe(c *fiber.Ctx) error {
 }
 
 func (h *UserHandler) UpdateMe(c *fiber.Ctx) error {
-	sess, err := c.Locals("store").(*session.Store).Get(c)
-	if err != nil {
-		return response.Error(c, fiber.StatusInternalServerError, "Session error")
-	}
-
-	userID := sess.Get("user_id")
-	if userID == nil {
-		return response.Error(c, fiber.StatusUnauthorized, "Unauthorized")
-	}
+	userID := c.Locals("user_id")
 
 	userIDToString, err := uuid.Parse(userID.(string))
     if err != nil {

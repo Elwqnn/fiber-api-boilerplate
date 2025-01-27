@@ -147,16 +147,11 @@ func (h *AuthHandler) OAuthCallback(c *fiber.Ctx) error {
 }
 
 func (h *AuthHandler) CheckSession(c *fiber.Ctx) error {
-	sess, err := c.Locals("store").(*session.Store).Get(c)
-	if err != nil {
-		return response.Error(c, fiber.StatusInternalServerError, "Failed to retreive session from locals")
-	}
-
 	return response.Success(c, fiber.Map{
-		"user_id":       sess.Get("user_id"),
-		"email":         sess.Get("email"),
-		"role":          sess.Get("role"),
-		"last_activity": sess.Get("last_activity"),
-		"expires_at":    sess.Get("expires_at"),
+		"user_id":       c.Locals("user_id"),
+		"email":         c.Locals("email"),
+		"role":          c.Locals("role"),
+		"last_activity": c.Locals("last_activity"),
+		"expires_at":    c.Locals("expires_at"),
 	})
 }
