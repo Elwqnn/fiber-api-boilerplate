@@ -1,6 +1,5 @@
 .env
 .links.config
-init.sql
 
 # IDE
 .idea

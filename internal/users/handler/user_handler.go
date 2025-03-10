@@ -1,14 +1,15 @@
 package handler
 
 import (
-	"fiber-api-boilerplate/internal/handler/dto"
-	"fiber-api-boilerplate/internal/handler/response"
-	"fiber-api-boilerplate/internal/service"
-	"fiber-api-boilerplate/internal/repository"
+	"log"
+	"backend/internal/users/handler/dto"
+	"backend/internal/users/repository"
+	"backend/internal/users/service"
+	"backend/pkg/response"
 
-	"gorm.io/gorm"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type UserHandler struct {
@@ -31,12 +32,13 @@ func (h *UserHandler) GetMe(c *fiber.Ctx) error {
 	userID := c.Locals("user_id")
 
 	userIDToString, err := uuid.Parse(userID.(string))
-    if err != nil {
-        return response.Error(c, fiber.StatusInternalServerError, "Invalid user ID format")
-    }
+	if err != nil {
+		return response.Error(c, fiber.StatusInternalServerError, "Invalid user ID format")
+	}
 
 	user, err := h.userService.GetByID(c.Context(), userIDToString)
 	if err != nil {
+		log.Println("Error: ", err)
 		return response.Error(c, fiber.StatusInternalServerError, err.Error())
 	}
 
@@ -47,9 +49,9 @@ func (h *UserHandler) UpdateMe(c *fiber.Ctx) error {
 	userID := c.Locals("user_id")
 
 	userIDToString, err := uuid.Parse(userID.(string))
-    if err != nil {
-        return response.Error(c, fiber.StatusInternalServerError, "Invalid user ID format")
-    }
+	if err != nil {
+		return response.Error(c, fiber.StatusInternalServerError, "Invalid user ID format")
+	}
 
 	req := c.Locals("payload").(*dto.UpdateUserRequest)
 	user, err := h.userService.GetByID(c.Context(), userIDToString)

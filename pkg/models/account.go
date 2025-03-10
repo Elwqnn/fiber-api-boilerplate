@@ -1,4 +1,4 @@
-package model
+package models
 
 import (
 	"time"
@@ -7,18 +7,20 @@ import (
 )
 
 // Account stores OAuth account information for users
-// One user can have multiple accounts (e.g., sign in with Google AND GitHub)
+// One user can have multiple accounts (e.g., sign in with Google AND Discord)
+// No validate keyword is used here because the creation of accounts is handled by the service layer
 type Account struct {
 	BaseModel
 	UserID uuid.UUID `json:"user_id" gorm:"not null;index"`
-	Type   string    `json:"type" gorm:"not null;default:credentials" validate:"required,oneof=oauth credentials"`
+	User   User      `json:"-" gorm:"foreignKey:UserID"`
+	Type   string    `json:"type" gorm:"not null;default:'credentials'"`
 
 	// Credentials-specific
-	Password string `json:"password,omitempty" validate:"required_if=Type credentials,min=6,max=100"`
+	Password string `json:"password,omitempty"`
 
 	// OAuth-specific
-	Provider          string    `json:"provider,omitempty" validate:"required_if=Type oauth"`
-	ProviderAccountID string    `json:"provider_account_id,omitempty" validate:"required_if=Type oauth"`
+	Provider          string    `json:"provider,omitempty"`
+	ProviderAccountID string    `json:"provider_account_id,omitempty"`
 	RefreshToken      string    `json:"refresh_token,omitempty"`
 	AccessToken       string    `json:"access_token,omitempty"`
 	ExpiresAt         time.Time `json:"expires_at,omitempty"`

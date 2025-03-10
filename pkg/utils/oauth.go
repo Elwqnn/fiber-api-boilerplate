@@ -76,47 +76,6 @@ func GetUserInfoFromGoogle(accessToken string) (*UserInfo, error) {
 	}, nil
 }
 
-func GetUserInfoFromGithub(accessToken string) (*UserInfo, error) {
-	req, err := http.NewRequest("GET", "https://api.github.com/user", nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed creating request: %v", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed getting user info: %v", err)
-	}
-	defer resp.Body.Close()
-
-	var result struct {
-		ID        interface{} `json:"id"`
-		Email     string      `json:"email"`
-		Name      string      `json:"name"`
-		Login     string      `json:"login"`
-		AvatarURL string      `json:"avatar_url"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed decoding user info: %v", err)
-	}
-
-	name := result.Name
-	if name == "" {
-		name = result.Login
-	}
-
-	return &UserInfo{
-		ID:                result.ID,
-		Name:              name,
-		Email:             result.Email,
-		Image:             result.AvatarURL,
-		Provider:          "github",
-		ProviderAccountID: fmt.Sprint(result.ID),
-		AccessToken:       accessToken,
-	}, nil
-}
-
 func GetUserInfoFromDiscord(accessToken string) (*UserInfo, error) {
 	req, err := http.NewRequest("GET", "https://discord.com/api/users/@me", nil)
 	if err != nil {

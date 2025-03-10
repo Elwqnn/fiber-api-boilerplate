@@ -1,9 +1,5 @@
 package dto
 
-import (
-	"fiber-api-boilerplate/internal/model"
-)
-
 type RegisterRequest struct {
 	Name     string `json:"name" validate:"required,min=3,max=100"`
 	Email    string `json:"email" validate:"required,email"`
@@ -19,9 +15,4 @@ type UpdateUserRequest struct {
 	Name  string `json:"name,omitempty" validate:"omitempty,min=3,max=100"`
 	Phone string `json:"phone,omitempty"`
 	Image string `json:"image,omitempty"`
-}
-
-type AuthResponse struct {
-	Token string     `json:"token"`
-	User  model.User `json:"user"`
 }

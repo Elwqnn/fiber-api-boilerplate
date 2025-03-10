@@ -1,17 +1,17 @@
 package handler
 
 import (
-	"fiber-api-boilerplate/internal/handler/dto"
-	"fiber-api-boilerplate/internal/handler/response"
-	"fiber-api-boilerplate/internal/model"
-	"fiber-api-boilerplate/internal/service"
-	"fiber-api-boilerplate/internal/repository"
-	"fiber-api-boilerplate/internal/config"
+	"backend/internal/users/handler/dto"
+	"backend/internal/users/repository"
+	"backend/internal/users/service"
+	"backend/pkg/config"
+	"backend/pkg/models"
+	"backend/pkg/response"
 	"time"
 
-	"gorm.io/gorm"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/session"
+	"gorm.io/gorm"
 )
 
 type AuthHandler struct {
@@ -33,7 +33,6 @@ func InitAuthHandler(cfg *config.Config, db *gorm.DB) *AuthHandler {
 	authService := service.NewAuthService(
 		userRepo,
 		accountRepo,
-		cfg.JWTSecret,
 	)
 
 	return NewAuthHandler(authService, userService)
@@ -42,7 +41,7 @@ func InitAuthHandler(cfg *config.Config, db *gorm.DB) *AuthHandler {
 func (h *AuthHandler) Register(c *fiber.Ctx) error {
 	req := c.Locals("payload").(*dto.RegisterRequest)
 
-	user := &model.User{
+	user := &models.User{
 		Name:  req.Name,
 		Email: req.Email,
 	}
@@ -51,21 +50,18 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 		return response.Error(c, fiber.StatusInternalServerError, err.Error())
 	}
 
-	token, err := h.authService.Login(c.Context(), req.Email, req.Password)
+	err := h.authService.Login(c.Context(), req.Email, req.Password)
 	if err != nil {
 		return response.Error(c, fiber.StatusInternalServerError, err.Error())
 	}
 
-	return response.Success(c, dto.AuthResponse{
-		Token: token,
-		User:  *user,
-	})
+	return response.Success(c, user)
 }
 
 func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	req := c.Locals("payload").(*dto.LoginRequest)
 
-	token, err := h.authService.Login(c.Context(), req.Email, req.Password)
+	err := h.authService.Login(c.Context(), req.Email, req.Password)
 	if err != nil {
 		return response.Error(c, fiber.StatusUnauthorized, "Invalid credentials")
 	}
@@ -76,7 +72,7 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	}
 
 	// Get session from context
-    sess, err := c.Locals("store").(*session.Store).Get(c)
+	sess, err := c.Locals("store").(*session.Store).Get(c)
 	if err != nil {
 		return response.Error(c, fiber.StatusInternalServerError, "Failed to retreive session from locals")
 	}
@@ -88,14 +84,11 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	sess.Set("last_activity", time.Now().Unix())
 	sess.Set("expires_at", time.Now().Add(time.Hour*24).Unix())
 
-    if err := sess.Save(); err != nil {
-        return response.Error(c, fiber.StatusInternalServerError, "Failed to save session")
-    }
+	if err := sess.Save(); err != nil {
+		return response.Error(c, fiber.StatusInternalServerError, "Failed to save session")
+	}
 
-	return response.Success(c, dto.AuthResponse{
-		Token: token,
-		User:  *user,
-	})
+	return response.Success(c, user)
 }
 
 func (h *AuthHandler) Logout(c *fiber.Ctx) error {
@@ -123,10 +116,12 @@ func (h *AuthHandler) Logout(c *fiber.Ctx) error {
 
 func (h *AuthHandler) OAuthSignIn(c *fiber.Ctx) error {
 	provider := c.Params("provider")
+
 	redirectURL, err := h.authService.GetOAuthRedirectURL(provider)
 	if err != nil {
 		return response.Error(c, fiber.StatusBadRequest, err.Error())
 	}
+
 	return c.Redirect(redirectURL)
 }
 
@@ -135,15 +130,12 @@ func (h *AuthHandler) OAuthCallback(c *fiber.Ctx) error {
 	code := c.Query("code")
 	state := c.Query("state")
 
-	token, user, err := h.authService.HandleOAuthCallback(c.Context(), provider, code, state)
+	user, err := h.authService.HandleOAuthCallback(c.Context(), provider, code, state)
 	if err != nil {
 		return response.Error(c, fiber.StatusInternalServerError, err.Error())
 	}
 
-	return response.Success(c, dto.AuthResponse{
-		Token: token,
-		User:  *user,
-	})
+	return response.Success(c, user)
 }
 
 func (h *AuthHandler) CheckSession(c *fiber.Ctx) error {

@@ -3,14 +3,13 @@ package service
 import (
 	"context"
 	"errors"
-	"fiber-api-boilerplate/internal/config"
-	"fiber-api-boilerplate/internal/model"
-	"fiber-api-boilerplate/internal/repository"
-	"fiber-api-boilerplate/pkg/utils"
 	"fmt"
 	"strings"
+	"backend/internal/users/repository"
+	"backend/pkg/config"
+	"backend/pkg/models"
+	"backend/pkg/utils"
 
-	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/oauth2"
 )
 
@@ -20,54 +19,50 @@ var (
 )
 
 type AuthService interface {
-	Register(ctx context.Context, user *model.User, password string) error
-	Login(ctx context.Context, email, password string) (string, error)
-	ValidateToken(token string) (*jwt.Token, error)
+	Register(ctx context.Context, user *models.User, password string) error
+	Login(ctx context.Context, email, password string) error
 	GetOAuthRedirectURL(provider string) (string, error)
-	HandleOAuthCallback(ctx context.Context, provider, code, state string) (string, *model.User, error)
+	HandleOAuthCallback(ctx context.Context, provider, code, state string) (*models.User, error)
 }
 
 type authService struct {
 	userRepo       repository.UserRepository
 	accountRepo    repository.AccountRepository
-	jwtSecret      string
 	oauthProviders *config.OAuthProviders
 }
 
 func NewAuthService(
 	userRepo repository.UserRepository,
 	accountRepo repository.AccountRepository,
-	jwtSecret string,
 ) AuthService {
 	return &authService{
 		userRepo:       userRepo,
 		accountRepo:    accountRepo,
-		jwtSecret:      jwtSecret,
 		oauthProviders: config.LoadOAuthConfig(),
 	}
 }
 
-func (s *authService) Register(ctx context.Context, user *model.User, password string) error {
+func (s *authService) Register(ctx context.Context, user *models.User, password string) error {
 	hashedPassword, err := utils.HashPassword(password)
 	if err != nil {
 		return err
 	}
-	account := &model.Account{
+	account := &models.Account{
 		Type:     "credentials",
 		Password: hashedPassword,
 	}
-	user.Accounts = []model.Account{*account}
+	user.Accounts = []models.Account{*account}
 	return s.userRepo.Create(ctx, user)
 }
 
-func (s *authService) Login(ctx context.Context, email, password string) (string, error) {
+func (s *authService) Login(ctx context.Context, email, password string) error {
 	user, err := s.userRepo.FindByEmail(ctx, email)
 	if err != nil {
-		return "", ErrUserNotFound
+		return ErrUserNotFound
 	}
 
 	// Find credentials account
-	var credAccount model.Account
+	var credAccount models.Account
 	for _, acc := range user.Accounts {
 		if acc.Type == "credentials" {
 			credAccount = acc
@@ -77,25 +72,10 @@ func (s *authService) Login(ctx context.Context, email, password string) (string
 
 	// Verify password
 	if !utils.CheckPassword(password, credAccount.Password) {
-		return "", ErrInvalidCredentials
+		return ErrInvalidCredentials
 	}
 
-	// Generate JWT token
-	token, err := utils.GenerateToken(user.ID.String(), s.jwtSecret)
-	if err != nil {
-		return "", fmt.Errorf("failed to generate token: %w", err)
-	}
-
-	return token, nil
-}
-
-func (s *authService) ValidateToken(tokenString string) (*jwt.Token, error) {
-	return jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.New("invalid signing method")
-		}
-		return []byte(s.jwtSecret), nil
-	})
+	return nil
 }
 
 func (s *authService) GetOAuthRedirectURL(provider string) (string, error) {
@@ -103,8 +83,6 @@ func (s *authService) GetOAuthRedirectURL(provider string) (string, error) {
 	switch provider {
 	case "google":
 		config = s.oauthProviders.Google.ToOAuth2Config()
-	case "github":
-		config = s.oauthProviders.Github.ToOAuth2Config()
 	case "discord":
 		config = s.oauthProviders.Discord.ToOAuth2Config()
 	default:
@@ -115,25 +93,25 @@ func (s *authService) GetOAuthRedirectURL(provider string) (string, error) {
 	return config.AuthCodeURL(state), nil
 }
 
-func (s *authService) HandleOAuthCallback(ctx context.Context, provider, code, state string) (string, *model.User, error) {
+func (s *authService) HandleOAuthCallback(ctx context.Context, provider, code, state string) (*models.User, error) {
 	if code == "" {
-		return "", nil, fmt.Errorf("authorization code is missing")
+		return nil, fmt.Errorf("authorization code is missing")
 	}
 
 	if state == "" {
-		return "", nil, fmt.Errorf("state parameter is missing")
+		return nil, fmt.Errorf("state parameter is missing")
 	}
 
 	// Exchange code for token
 	token, err := s.exchangeCodeForToken(ctx, provider, code)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to exchange code: %w", err)
+		return nil, fmt.Errorf("failed to exchange code: %w", err)
 	}
 
 	// Get user info from provider
-	userInfo, err := s.getUserInfo(ctx, provider, token.AccessToken)
+	userInfo, err := s.getUserInfo(provider, token.AccessToken)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to get user info: %w", err)
+		return nil, fmt.Errorf("failed to get user info: %w", err)
 	}
 
 	// Add token info to userInfo
@@ -145,8 +123,6 @@ func (s *authService) HandleOAuthCallback(ctx context.Context, provider, code, s
 	switch provider {
 	case "google":
 		scopes = s.oauthProviders.Google.Scopes
-	case "github":
-		scopes = s.oauthProviders.Github.Scopes
 	case "discord":
 		scopes = s.oauthProviders.Discord.Scopes
 	}
@@ -155,16 +131,10 @@ func (s *authService) HandleOAuthCallback(ctx context.Context, provider, code, s
 	// Find or create user
 	user, err := s.findOrCreateUser(ctx, userInfo, provider)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to process user: %w", err)
+		return nil, fmt.Errorf("failed to process user: %w", err)
 	}
 
-	// Generate JWT
-	jwtToken, err := utils.GenerateToken(user.ID.String(), s.jwtSecret)
-	if err != nil {
-		return "", nil, fmt.Errorf("failed to generate token: %w", err)
-	}
-
-	return jwtToken, user, nil
+	return user, nil
 }
 
 func (s *authService) exchangeCodeForToken(ctx context.Context, provider, code string) (*oauth2.Token, error) {
@@ -172,8 +142,6 @@ func (s *authService) exchangeCodeForToken(ctx context.Context, provider, code s
 	switch provider {
 	case "google":
 		config = s.oauthProviders.Google.ToOAuth2Config()
-	case "github":
-		config = s.oauthProviders.Github.ToOAuth2Config()
 	case "discord":
 		config = s.oauthProviders.Discord.ToOAuth2Config()
 	default:
@@ -188,12 +156,10 @@ func (s *authService) exchangeCodeForToken(ctx context.Context, provider, code s
 	return token, nil
 }
 
-func (s *authService) getUserInfo(ctx context.Context, provider, accessToken string) (*utils.UserInfo, error) {
+func (s *authService) getUserInfo(provider, accessToken string) (*utils.UserInfo, error) {
 	switch provider {
 	case "google":
 		return utils.GetUserInfoFromGoogle(accessToken)
-	case "github":
-		return utils.GetUserInfoFromGithub(accessToken)
 	case "discord":
 		return utils.GetUserInfoFromDiscord(accessToken)
 	default:
@@ -201,11 +167,9 @@ func (s *authService) getUserInfo(ctx context.Context, provider, accessToken str
 	}
 }
 
-func (s *authService) findOrCreateUser(ctx context.Context, userInfo *utils.UserInfo, provider string) (*model.User, error) {
-	// First try to find existing account by provider ID
+func (s *authService) findOrCreateUser(ctx context.Context, userInfo *utils.UserInfo, provider string) (*models.User, error) {
 	existingAccount, err := s.accountRepo.FindByProviderID(ctx, provider, fmt.Sprint(userInfo.ID))
 	if err == nil {
-		// Account exists, get and return user
 		return s.userRepo.FindByID(ctx, existingAccount.UserID)
 	}
 
@@ -221,7 +185,7 @@ func (s *authService) findOrCreateUser(ctx context.Context, userInfo *utils.User
 		}
 
 		// Create new OAuth account
-		account := &model.Account{
+		account := &models.Account{
 			UserID:            existingUser.ID,
 			Type:              "oauth",
 			Provider:          provider,
@@ -239,7 +203,7 @@ func (s *authService) findOrCreateUser(ctx context.Context, userInfo *utils.User
 	}
 
 	// Create new user and account
-	user := &model.User{
+	user := &models.User{
 		Name:  userInfo.Name,
 		Email: userInfo.Email,
 		Image: userInfo.Image,
@@ -252,7 +216,7 @@ func (s *authService) findOrCreateUser(ctx context.Context, userInfo *utils.User
 	}
 
 	// Create OAuth account
-	account := &model.Account{
+	account := &models.Account{
 		UserID:            user.ID,
 		Type:              "oauth",
 		Provider:          provider,

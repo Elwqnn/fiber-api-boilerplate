@@ -36,7 +36,6 @@ type OAuthConfig struct {
 // OAuthProviders is the configuration struc containing all OAuth providers
 type OAuthProviders struct {
 	Google  OAuthConfig
-	Github  OAuthConfig
 	Discord OAuthConfig
 }
 
@@ -44,11 +43,6 @@ var (
 	GoogleEndpoints = oauth2.Endpoint{
 		AuthURL:  "https://accounts.google.com/o/oauth2/auth",
 		TokenURL: "https://oauth2.googleapis.com/token",
-	}
-
-	GithubEndpoints = oauth2.Endpoint{
-		AuthURL:  "https://github.com/login/oauth/authorize",
-		TokenURL: "https://github.com/login/oauth/access_token",
 	}
 	DiscordEnpoints = oauth2.Endpoint{
 		AuthURL:  "https://discord.com/api/oauth2/authorize",
@@ -77,7 +71,7 @@ func getEnvAsInt(key string, defaultValue int) int {
 
 func LoadConfig() *Config {
 	cfg := &Config{
-		Port:      getEnv("PORT", "8080"),
+		Port:      getEnv("PORT", "3000"),
 		Env:       getEnv("ENV", "dev"),
 		JWTSecret: getEnv("JWT_SECRET", "thisisaverylongsecret"),
 	}
@@ -100,13 +94,6 @@ func LoadOAuthConfig() *OAuthProviders {
 			RedirectURL:  getEnv("GOOGLE_REDIRECT_URL", "http://localhost:3000/api/v1/auth/callback/google"),
 			Scopes:       []string{"profile", "email"},
 		},
-		Github: OAuthConfig{
-			Provider:     "github",
-			ClientID:     getEnv("GITHUB_CLIENT_ID", ""),
-			ClientSecret: getEnv("GITHUB_CLIENT_SECRET", ""),
-			RedirectURL:  getEnv("GITHUB_REDIRECT_URL", "http://localhost:3000/api/v1/auth/callback/github"),
-			Scopes:       []string{"user:email"},
-		},
 		Discord: OAuthConfig{
 			Provider:     "discord",
 			ClientID:     getEnv("DISCORD_CLIENT_ID", ""),
@@ -123,8 +110,6 @@ func (c *OAuthConfig) ToOAuth2Config() oauth2.Config {
 	switch c.Provider {
 	case "google":
 		endpoint = GoogleEndpoints
-	case "github":
-		endpoint = GithubEndpoints
 	case "discord":
 		endpoint = DiscordEnpoints
 	}
@@ -140,10 +125,10 @@ func (c *OAuthConfig) ToOAuth2Config() oauth2.Config {
 
 func SetupSessionStore() *session.Store {
 	storage := redis.New(redis.Config{
-		Host:      getEnv("REDIS_HOST", "redis"),
-		Port:      getEnvAsInt("REDIS_PORT", 6379),
-		Password:  getEnv("REDIS_PASSWORD", ""),
-		Database:  getEnvAsInt("REDIS_DB", 0),
+		Host:     getEnv("REDIS_HOST", "redis"),
+		Port:     getEnvAsInt("REDIS_PORT", 6379),
+		Password: getEnv("REDIS_PASSWORD", ""),
+		Database: getEnvAsInt("REDIS_DB", 0),
 	})
 
 	sessionStore := session.New(session.Config{

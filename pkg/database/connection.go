@@ -1,9 +1,9 @@
 package database
 
 import (
-	"fiber-api-boilerplate/internal/config"
-	"fiber-api-boilerplate/internal/model"
 	"fmt"
+	"backend/pkg/config"
+	"backend/pkg/models"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -31,8 +31,8 @@ func ConnectDB(cfg *config.Config) (*gorm.DB, error) {
 }
 
 func runMigrations(db *gorm.DB) error {
-    return db.AutoMigrate(
-        &model.User{},
-        &model.Account{},
-    )
+	return db.AutoMigrate(
+		&models.User{},
+		&models.Account{},
+	)
 }
